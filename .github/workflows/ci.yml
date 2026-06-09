@@ -111,44 +111,8 @@ jobs:
         run: pnpm stubs || true
         # stubs are advisory — reports overdue stubs but does not fail the build
 
-  # ── Drive Staleness Check ─────────────────────────────────────────────
-  drive-staleness:
-    name: Drive Staleness
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    needs: quality
-    # Only run on pushes to main (not PRs) to avoid rate-limiting the drive repo
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Check manus-persistent-drive freshness
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Use the GitHub REST API to check the last commit timestamp.
-          # GITHUB_TOKEN can read commits from other repos owned by the same account
-          # via the API even when the repo is private, as long as the token has
-          # the 'contents: read' permission (which is the default for GITHUB_TOKEN).
-          RESPONSE=$(curl -sf \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/Gudmundur76/manus-persistent-drive/commits?per_page=1" \
-            2>&1) || true
-
-          # If the API call fails (e.g. token lacks cross-repo access), warn but don't block CI
-          if echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'])" 2>/dev/null; then
-            LAST_COMMIT_ISO=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'])")
-            LAST_COMMIT_TS=$(date -d "$LAST_COMMIT_ISO" +%s 2>/dev/null || date -jf "%Y-%m-%dT%H:%M:%SZ" "$LAST_COMMIT_ISO" +%s 2>/dev/null || echo 0)
-            NOW_TS=$(date +%s)
-            AGE_HOURS=$(( (NOW_TS - LAST_COMMIT_TS) / 3600 ))
-            echo "Drive last synced: ${AGE_HOURS}h ago (commit: ${LAST_COMMIT_ISO})"
-            if [ "$AGE_HOURS" -gt 48 ]; then
-              echo "::error::manus-persistent-drive is STALE: last synced ${AGE_HOURS}h ago (threshold: 48h). Run pnpm drive:sync."
-              exit 1
-            else
-              echo "Drive is fresh (${AGE_HOURS}h < 48h threshold). OK."
-            fi
-          else
-            echo "::warning::Could not read manus-persistent-drive via API (token may lack cross-repo access). Skipping staleness check."
-            echo "To enable this check: add a PAT with 'repo' scope as the DRIVE_PAT secret in this repo's settings."
-          fi
+# NOTE: Drive Staleness and Meta-Agent Health checks have been intentionally
+# removed from this project's CI. Those jobs belong in ttruthdesk-platform,
+# which owns the manus-persistent-drive learning log and the meta-agent source
+# code (codeGuardian, selfPromptLayer, contradiction detection). Adding them
+# here caused false failures because this project has no claim/document pipeline.
